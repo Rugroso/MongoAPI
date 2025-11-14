@@ -19,6 +19,24 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+
+const VALID_API_KEYS = (process.env.API_KEY);
+
+const authenticateApiKey = (req, res, next) => {
+    const apiKey = req.header('X-API-KEY'); // Get API key from 'X-API-KEY' header
+
+    if (!apiKey) {
+        return res.status(401).json({ message: 'API Key is missing.' });
+    }
+
+    if (!VALID_API_KEYS.includes(apiKey)) {
+        return res.status(401).json({ message: 'Invalid API Key.' });
+    }
+
+    next();
+};
+
+
 // Middleware para conectar a DB serverless
 app.use(async (req, res, next) => {
   try {
@@ -33,7 +51,7 @@ app.use(async (req, res, next) => {
 });
 
 // Rutas principales
-app.get("/", (req, res) => {
+app.get("/", authenticateApiKey, (req, res) => {
   res.json({
     message: "Server Corriendo exitosamente",
   });
