@@ -3,8 +3,8 @@ import Student from "../models/Student.mjs";
 import Professor from "../models/Professor.mjs";
 import Schedule from "../models/Schedule.mjs";
 import Version from "../models/Version.mjs";
-import { generateJustificantePDF } from "../lib/justificantePdfService.js";
-import { sendJustificanteEmail } from "../lib/justificanteEmailService.js";
+import { generateJustificantePDF } from "../lib/justificantePdfService.mjs";
+import { sendJustificanteEmail } from "../lib/justificanteEmailService.mjs";
 
 const router = express.Router();
 

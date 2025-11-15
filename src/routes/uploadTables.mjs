@@ -5,8 +5,8 @@ import Professor from "../models/Professor.mjs";
 import Schedule from "../models/Schedule.mjs";
 import axios from "axios";
 import { JSDOM } from "jsdom";
-import { generateJustificantePDF } from "../lib/justificantePdfService.js";
-import { sendJustificanteEmail } from "../lib/justificanteEmailService.js";
+import { generateJustificantePDF } from "../lib/justificantePdfService.mjs";
+import { sendJustificanteEmail } from "../lib/justificanteEmailService.mjs";
 
 const router = express.Router();
 
