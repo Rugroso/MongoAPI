@@ -3,47 +3,24 @@ import Version from "../models/Version.mjs";
 import Student from "../models/Student.mjs";
 import Professor from "../models/Professor.mjs";
 import Schedule from "../models/Schedule.mjs";
-import axios from "axios";
-import { JSDOM } from "jsdom";
-import { generateJustificantePDF } from "../lib/justificantePdfService.mjs";
-import { sendJustificanteEmail } from "../lib/justificanteEmailService.mjs";
 
 const router = express.Router();
 
-// Endpoint para subir tablas desde archivo HTML
+// Endpoint para subir tablas desde datos procesados en el cliente
 router.post("/upload-tables", async (req, res) => {
   try {
-    const { fileUrl, description } = req.body;
+    const { estudiantes, profesores, horarios, description } = req.body;
     
-    if (!fileUrl) {
-      return res.status(400).json({ error: "fileUrl requerido" });
+    // Validaciones
+    if (!estudiantes || !Array.isArray(estudiantes)) {
+      return res.status(400).json({ error: "estudiantes es requerido y debe ser un array" });
     }
     
-    // Validar que sea una URL válida
-    try {
-      new URL(fileUrl);
-    } catch (error) {
-      return res.status(400).json({ error: "fileUrl debe ser una URL válida" });
+    if (!profesores || !Array.isArray(profesores)) {
+      return res.status(400).json({ error: "profesores es requerido y debe ser un array" });
     }
 
-    // Descargar archivo HTML con timeout mayor
-    let response;
-    try {
-      response = await axios.get(fileUrl, { 
-        timeout: 30000, // 30 segundos
-        maxContentLength: 10 * 1024 * 1024 // 10MB
-      });
-    } catch (error) {
-      return res.status(400).json({ 
-        error: "No se pudo descargar el archivo", 
-        details: error.message 
-      });
-    }
-    
-    console.log('📄 Archivo descargado, procesando HTML...');
-    const html = response.data;
-    const dom = new JSDOM(html);
-    const document = dom.window.document;
+    console.log('📊 Recibidos:', estudiantes.length, 'estudiantes y', profesores.length, 'profesores');
 
     // Obtener la última versión
     const lastVersion = await Version.findOne().sort({ version: -1 });
@@ -51,85 +28,18 @@ router.post("/upload-tables", async (req, res) => {
 
     console.log('📊 Nueva versión:', newVersion);
 
-    // Procesar tablas y recolectar datos
-    const tables = document.querySelectorAll("table");
-    const estudiantesMap = new Map();
-    const profesoresMap = new Map();
-    const horariosData = [];
-    
-    console.log('🔍 Procesando', tables.length, 'tablas...');
-    
-    for (const table of tables) {
-      const rows = table.querySelectorAll("tr");
-      let profesorActual = null;
-      let materiaActual = "";
-      
-      for (const row of rows) {
-        const cells = row.querySelectorAll("td, th");
-        
-        // Detectar línea de profesor
-        if (cells.length === 1 && row.textContent.includes("Profesor")) {
-          const nombreCompleto = row.textContent.replace("Profesor:", "").trim();
-          const [nombre, ...apellidos] = nombreCompleto.split(" ");
-          const key = `${nombre}_${apellidos.join(" ")}`;
-          
-          if (!profesoresMap.has(key)) {
-            profesoresMap.set(key, {
-              nombre,
-              apellidos: apellidos.join(" "),
-              correo: "",
-              escuela: "Ingeniería",
-              version: newVersion
-            });
-          }
-          profesorActual = key;
-        } 
-        // Detectar línea de estudiante
-        else if (cells.length > 3) {
-          const matricula = cells[4]?.textContent.trim();
-          const nombreCompleto = cells[5]?.textContent.trim() || "";
-          
-          if (matricula && nombreCompleto) {
-            const [apellidosStr, nombreStr] = nombreCompleto.split(",").map(s => s.trim());
-            const carrera = cells[1]?.textContent.trim() || "";
-            
-            if (!estudiantesMap.has(matricula)) {
-              estudiantesMap.set(matricula, {
-                matricula,
-                nombre: nombreStr || "",
-                apellidos: apellidosStr || "",
-                carrera,
-                escuela: "Ingeniería",
-                status: "activo",
-                version: newVersion
-              });
-            }
-            
-            // Guardar relación para horarios
-            if (profesorActual) {
-              horariosData.push({
-                matricula,
-                profesorKey: profesorActual,
-                materia: materiaActual
-              });
-            }
-          }
-        }
-      }
-    }
-
-    console.log('👥 Estudiantes únicos encontrados:', estudiantesMap.size);
-    console.log('👨‍🏫 Profesores únicos encontrados:', profesoresMap.size);
+    // Agregar versión a los datos
+    const estudiantesConVersion = estudiantes.map(e => ({ ...e, version: newVersion }));
+    const profesoresConVersion = profesores.map(p => ({ ...p, version: newVersion }));
 
     // Insertar profesores usando bulkWrite para mejor rendimiento
-    const profesoresArray = Array.from(profesoresMap.values());
     const profesoresInsertados = [];
     
-    if (profesoresArray.length > 0) {
+    if (profesoresConVersion.length > 0) {
       console.log('💾 Insertando profesores en lotes...');
       const BATCH_SIZE = 100;
-      for (let i = 0; i < profesoresArray.length; i += BATCH_SIZE) {
-        const batch = profesoresArray.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < profesoresConVersion.length; i += BATCH_SIZE) {
+        const batch = profesoresConVersion.slice(i, i + BATCH_SIZE);
         const ops = batch.map(prof => ({
           updateOne: {
             filter: { nombre: prof.nombre, apellidos: prof.apellidos },
@@ -141,7 +51,7 @@ router.post("/upload-tables", async (req, res) => {
       }
       
       // Obtener todos los profesores insertados
-      const profesoresKeys = profesoresArray.map(p => ({ nombre: p.nombre, apellidos: p.apellidos }));
+      const profesoresKeys = profesoresConVersion.map(p => ({ nombre: p.nombre, apellidos: p.apellidos }));
       const profs = await Professor.find({ $or: profesoresKeys });
       profesoresInsertados.push(...profs);
     }
@@ -154,14 +64,13 @@ router.post("/upload-tables", async (req, res) => {
     });
 
     // Insertar estudiantes usando bulkWrite
-    const estudiantesArray = Array.from(estudiantesMap.values());
     const estudiantesInsertados = [];
     
-    if (estudiantesArray.length > 0) {
+    if (estudiantesConVersion.length > 0) {
       console.log('💾 Insertando estudiantes en lotes...');
       const BATCH_SIZE = 100;
-      for (let i = 0; i < estudiantesArray.length; i += BATCH_SIZE) {
-        const batch = estudiantesArray.slice(i, i + BATCH_SIZE);
+      for (let i = 0; i < estudiantesConVersion.length; i += BATCH_SIZE) {
+        const batch = estudiantesConVersion.slice(i, i + BATCH_SIZE);
         const ops = batch.map(est => ({
           updateOne: {
             filter: { matricula: est.matricula },
@@ -173,7 +82,7 @@ router.post("/upload-tables", async (req, res) => {
       }
       
       // Obtener todos los estudiantes insertados
-      const matriculas = estudiantesArray.map(e => e.matricula);
+      const matriculas = estudiantesConVersion.map(e => e.matricula);
       const ests = await Student.find({ matricula: { $in: matriculas } });
       estudiantesInsertados.push(...ests);
     }
@@ -184,17 +93,18 @@ router.post("/upload-tables", async (req, res) => {
       estudiantesById.set(est.matricula, est._id);
     });
 
-    // Insertar horarios usando bulkWrite
-    if (horariosData.length > 0) {
+    // Insertar horarios si existen
+    let horariosInsertados = 0;
+    if (horarios && Array.isArray(horarios) && horarios.length > 0) {
       console.log('💾 Insertando horarios en lotes...');
-      const scheduleOps = horariosData
+      const scheduleOps = horarios
         .filter(h => estudiantesById.has(h.matricula) && profesoresById.has(h.profesorKey))
         .map(h => ({
           insertOne: {
             document: {
               alumno: estudiantesById.get(h.matricula),
               profesor: profesoresById.get(h.profesorKey),
-              materia: h.materia,
+              materia: h.materia || "",
               dia: "",
               horaInicio: "",
               horaFin: "",
@@ -203,18 +113,21 @@ router.post("/upload-tables", async (req, res) => {
           }
         }));
       
-      const BATCH_SIZE = 500;
-      for (let i = 0; i < scheduleOps.length; i += BATCH_SIZE) {
-        const batch = scheduleOps.slice(i, i + BATCH_SIZE);
-        await Schedule.bulkWrite(batch);
+      if (scheduleOps.length > 0) {
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < scheduleOps.length; i += BATCH_SIZE) {
+          const batch = scheduleOps.slice(i, i + BATCH_SIZE);
+          await Schedule.bulkWrite(batch);
+        }
+        horariosInsertados = scheduleOps.length;
+        console.log('✅ Horarios insertados:', horariosInsertados);
       }
-      console.log('✅ Horarios insertados:', scheduleOps.length);
     }
 
     // Registrar nueva versión
     await Version.create({
       version: newVersion,
-      description,
+      description: description || 'Carga desde cliente',
       alumnos: Array.from(estudiantesById.values()),
       profesores: Array.from(profesoresById.values()),
     });
@@ -222,16 +135,20 @@ router.post("/upload-tables", async (req, res) => {
     console.log('✅ Proceso completado exitosamente');
     res.json({ 
       success: true, 
+      message: 'Datos procesados exitosamente',
       version: newVersion,
       stats: {
         estudiantes: estudiantesInsertados.length,
         profesores: profesoresInsertados.length,
-        horarios: horariosData.length
+        horarios: horariosInsertados
       }
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error procesando archivo" });
+    console.error('❌ Error procesando datos:', err);
+    res.status(500).json({ 
+      error: "Error procesando datos",
+      details: err.message 
+    });
   }
 });
 
