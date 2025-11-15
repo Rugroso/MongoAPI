@@ -58,13 +58,13 @@ router.post("/justificantes", async (req, res) => {
       requester,
       eventName,
       justifiedDates,
-      studentsText,
+      estudiantes,
       userId,
       userEmail
     } = req.body;
 
     // Validaciones
-    if (!requester || !eventName || !justifiedDates || !studentsText) {
+    if (!requester || !eventName || !justifiedDates || !estudiantes) {
       return res.status(400).json({
         success: false,
         error: "Faltan datos requeridos"
@@ -78,6 +78,13 @@ router.post("/justificantes", async (req, res) => {
       });
     }
 
+    if (!Array.isArray(estudiantes) || estudiantes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: "El arreglo de estudiantes es obligatorio"
+      });
+    }
+
     // Validar formato de fechas
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     const invalidDates = justifiedDates.filter(fecha => !dateRegex.test(fecha));
@@ -88,36 +95,13 @@ router.post("/justificantes", async (req, res) => {
       });
     }
 
-    // Parsear estudiantes del texto
-    const studentLines = studentsText.split('\n').filter(line => line.trim());
-    const parsedStudents = [];
-    
-    for (const line of studentLines) {
-      // Formato esperado: "Juan Pérez – 12345 – Ingeniería"
-      const parts = line.split('–').map(p => p.trim());
-      if (parts.length >= 3) {
-        const nombre = parts[0];
-        const matricula = parts[1];
-        const carrera = parts[2];
-        
-        // Buscar estudiante en la BD
-        let alumno = await Student.findOne({ matricula });
-        
-        parsedStudents.push({
-          alumno: alumno?._id,
-          matriculaRecibida: matricula,
-          carreraRecibida: carrera,
-          nombreRecibido: nombre
-        });
-      }
-    }
-
-    if (parsedStudents.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: "No se pudo parsear ningún estudiante. Verifica el formato."
-      });
-    }
+    // Transformar estudiantes para JustificationRequest
+    const parsedStudents = estudiantes.map(e => ({
+      alumno: e._id || null,
+      matriculaRecibida: e.matricula,
+      nombreRecibido: e.nombre,
+      carreraRecibida: e.carrera || ''
+    }));
 
     // Convertir fechas a Date objects
     const diasJustificar = justifiedDates.map(d => new Date(d));
