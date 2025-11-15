@@ -167,17 +167,34 @@ describe.skip('POST /api/upload-tables', () => {
     expect(res.body.error).toBe('fileUrl requerido');
   });
 
-  // Skip test de URL real por ahora
-  it.skip('debe procesar un archivo HTML válido', async () => {
+  // Test con URL de producción - GitHub raw
+  it('debe procesar el archivo HTML de producción', async () => {
+    if (mongoose.connection.readyState !== 1) {
+      console.warn('⚠️  Saltando test - MongoDB no conectado');
+      return;
+    }
+
     const res = await request(app)
       .post('/api/upload-tables')
       .send({ 
-        fileUrl: 'http://example.com/valid.html',
-        description: 'Test upload'
+        fileUrl: 'https://raw.githubusercontent.com/Rugroso/MongoAPI/main/srvlistas.htm',
+        description: 'Test de producción con archivo HTML real'
       });
     
+    console.log('📊 Respuesta del servidor:', res.body);
     expect(res.statusCode).toBe(200);
-  });
+    expect(res.body.success).toBe(true);
+    expect(res.body.version).toBeGreaterThan(0);
+    
+    // Verificar que se crearon estudiantes y profesores
+    const studentCount = await Student.countDocuments({});
+    const professorCount = await Professor.countDocuments({});
+    console.log(`✅ Estudiantes creados: ${studentCount}`);
+    console.log(`✅ Profesores creados: ${professorCount}`);
+    
+    expect(studentCount).toBeGreaterThan(0);
+    expect(professorCount).toBeGreaterThan(0);
+  }, 30000); // Timeout extendido a 30 segundos
 });
 
 describe('POST /api/create-justificante', () => {
