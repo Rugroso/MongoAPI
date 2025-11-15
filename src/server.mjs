@@ -13,7 +13,6 @@ import express from "express";
 import cors from "cors";
 import connectDB from "./config/db.mjs";
 import usersRoutes from "./routes/users.mjs";
-import uploadTablesRoutes from "./routes/uploadTables.mjs";
 import justificantesRoutes from "./routes/justificantes.mjs";
 
 const app = express();
@@ -64,7 +63,6 @@ app.use("/api", authenticateApiKey);
 
 // Rutas de la API (protegidas por autenticación)
 app.use("/api", usersRoutes);
-app.use("/api", uploadTablesRoutes);
 app.use("/api", justificantesRoutes);
 
 // Para desarrollo local
