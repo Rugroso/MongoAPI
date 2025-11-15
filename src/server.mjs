@@ -13,8 +13,11 @@ import express from "express";
 import cors from "cors";
 import connectDB from "./config/db.mjs";
 import usersRoutes from "./routes/users.mjs";
+import uploadTablesRoutes from "./routes/uploadTables.mjs";
+import justificantesRoutes from "./routes/justificantes.mjs";
 
 const app = express();
+
 
 app.use(cors());
 app.use(express.json());
@@ -37,6 +40,10 @@ const authenticateApiKey = (req, res, next) => {
 };
 
 
+// Rutas
+app.use("/api", usersRoutes);
+app.use("/api", uploadTablesRoutes);
+app.use("/api", justificantesRoutes);
 // Middleware para conectar a DB serverless
 app.use(async (req, res, next) => {
   try {

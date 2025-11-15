@@ -7,6 +7,7 @@ const ScheduleSchema = new mongoose.Schema({
   materia: { type: String },
   horaInicio: { type: String },
   horaFin: { type: String },
+  version: { type: Number, required: true },
 });
 
 const Schedule = mongoose.model("Schedule", ScheduleSchema);
