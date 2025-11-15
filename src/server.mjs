@@ -18,56 +18,54 @@ import justificantesRoutes from "./routes/justificantes.mjs";
 
 const app = express();
 
-
+// Middlewares globales
 app.use(cors());
 app.use(express.json());
 
-
-const VALID_API_KEYS = (process.env.API_KEY);
-
-const authenticateApiKey = (req, res, next) => {
-    const apiKey = req.header('X-API-KEY'); // Get API key from 'X-API-KEY' header
-
-    if (!apiKey) {
-        return res.status(401).json({ message: 'API Key is missing.' });
-    }
-
-    if (!VALID_API_KEYS.includes(apiKey)) {
-        return res.status(401).json({ message: 'Invalid API Key.' });
-    }
-
-    next();
-};
-
-
-// Rutas
-app.use("/api", usersRoutes);
-app.use("/api", uploadTablesRoutes);
-app.use("/api", justificantesRoutes);
-// Middleware para conectar a DB serverless
+// Middleware para conectar a DB serverless (debe ir antes de las rutas)
 app.use(async (req, res, next) => {
   try {
     await connectDB();
     next();
   } catch (error) {
     console.error("Error conectando a MongoDB:", error);
-    res.status(500).json({
+    return res.status(500).json({
       error: "Error de conexión a base de datos",
     });
   }
 });
 
-app.use(authenticateApiKey);
+// Configuración de API Key
+const VALID_API_KEYS = process.env.API_KEY ? process.env.API_KEY.split(',') : [];
 
-// Rutas principales
+const authenticateApiKey = (req, res, next) => {
+  const apiKey = req.header('X-API-KEY');
+
+  if (!apiKey) {
+    return res.status(401).json({ message: 'API Key is missing.' });
+  }
+
+  if (!VALID_API_KEYS.includes(apiKey)) {
+    return res.status(401).json({ message: 'Invalid API Key.' });
+  }
+
+  next();
+};
+
+// Ruta principal (sin autenticación)
 app.get("/", (req, res) => {
   res.json({
     message: "Server Corriendo exitosamente",
   });
 });
 
-// Rutas de la API
+// Aplicar autenticación a todas las rutas /api
+app.use("/api", authenticateApiKey);
+
+// Rutas de la API (protegidas por autenticación)
 app.use("/api", usersRoutes);
+app.use("/api", uploadTablesRoutes);
+app.use("/api", justificantesRoutes);
 
 // Para desarrollo local
 if (process.env.NODE_ENV !== "production") {
