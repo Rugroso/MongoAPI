@@ -50,8 +50,10 @@ app.use(async (req, res, next) => {
   }
 });
 
+app.use(authenticateApiKey);
+
 // Rutas principales
-app.get("/", authenticateApiKey, (req, res) => {
+app.get("/", (req, res) => {
   res.json({
     message: "Server Corriendo exitosamente",
   });
