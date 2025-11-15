@@ -15,6 +15,7 @@ import connectDB from "./config/db.mjs";
 import usersRoutes from "./routes/users.mjs";
 import justificantesRoutes from "./routes/justificantes.mjs";
 import uploadTablesRoutes from "./routes/uploadTables.mjs";
+import estudiantesRoutes from "./routes/estudiantes.mjs";
 
 const app = express();
 
@@ -66,6 +67,7 @@ app.use("/api", authenticateApiKey);
 app.use("/api", usersRoutes);
 app.use("/api", justificantesRoutes);
 app.use("/api", uploadTablesRoutes);
+app.use("/api", estudiantesRoutes);
 
 // Para desarrollo local
 if (process.env.NODE_ENV !== "production") {
